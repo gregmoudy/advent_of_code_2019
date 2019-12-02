@@ -74,7 +74,116 @@ if __name__ == '__main__':
 	position 0 after the program halts?
 	"""
 
-	int_strs = lines[ 0 ].split( ',' )
-	ints = [ int( x ) for x in int_strs ] # len( ) 129
+	def compute( noun, verb ):
+		OPCODE_ADD 			= 1 # Add position 2 to 3 and copy to position set in position 4.
+		OPCODE_MULTIPLY	= 2 # Multiply position 2 to 3 and copy to position set in position 4.
+		OPCODE_FINISHED 	= 99 # HALT
 
-	print( 'break' )
+		VALID_OPCODES = [ OPCODE_ADD, OPCODE_MULTIPLY, OPCODE_FINISHED ]
+
+		STEPS = 4
+
+		int_strs = lines[ 0 ].split( ',' )
+		ints = [ int( x ) for x in int_strs ] # len( ) 129
+
+		# PART 1
+		program_input = list( ints )
+
+		# Modify the input based on the instructions.
+		program_input[ 1 ] = noun
+		program_input[ 2 ] = verb
+
+		index = 0
+		while index <= ( len( program_input ) - STEPS ):
+			opcode = program_input[ index ]
+			val1_index = program_input[ index + 1 ]
+			val2_index = program_input[ index + 2 ]
+			target_index = program_input[ index + 3 ]
+
+			# TODO: Do I need to error check the index data?
+			#if target_index < 0 or target_index > ( len( program_input ) - 1 ):
+				#print( 'ERROR: Target index is outside of the range of the program input list: {0}'.format( target_index ) )
+				#raise ValueError
+
+			val1 = program_input[ val1_index ]
+			val2 = program_input[ val2_index ]
+
+			if opcode == OPCODE_FINISHED:
+				#print( 'OPCODE_FINISHED hit at index: {0}'.format( index ) )
+				break
+
+			if opcode == OPCODE_ADD:
+				new_val = val1 + val2
+
+			elif opcode == OPCODE_MULTIPLY:
+				new_val = val1 * val2
+
+			else:
+				print( 'ERROR: Unknown Opcode: {0} at index {1}'.format( opcode, index ) )
+				raise ValueError
+
+			program_input[ target_index ] = new_val
+
+			index += STEPS
+
+		return program_input[ 0 ]
+
+	val = compute( 12, 2 ) # 12, 2 = 5482655
+	print( 'Value at position 0: {0}'.format( val ) )
+
+	"""
+	--- Part Two ---
+	"Good, the new computer seems to be working correctly! Keep it nearby during this mission - you'll probably use it
+	again. Real Intcode computers support many more features than your new one, but we'll let you know what they are as
+	you need them."
+
+	"However, your current priority should be to complete your gravity assist around the Moon. For this mission to
+	succeed, we should settle on some terminology for the parts you've already built."
+
+	Intcode programs are given as a list of integers; these values are used as the initial state for the computer's
+	memory. When you run an Intcode program, make sure to start by initializing memory to the program's values.
+	A position in memory is called an address (for example, the first value in memory is at "address 0").
+
+	Opcodes (like 1, 2, or 99) mark the beginning of an instruction. The values used immediately after an opcode, if any,
+	are called the instruction's parameters. For example, in the instruction 1,2,3,4, 1 is the opcode; 2, 3, and 4 are
+	the parameters. The instruction 99 contains only an opcode and has no parameters.
+
+	The address of the current instruction is called the instruction pointer; it starts at 0. After an instruction
+	finishes, the instruction pointer increases by the number of values in the instruction; until you add more
+	instructions to the computer, this is always 4 (1 opcode + 3 parameters) for the add and multiply instructions.
+	(The halt instruction would increase the instruction pointer by 1, but it halts the program instead.)
+
+	"With terminology out of the way, we're ready to proceed. To complete the gravity assist, you need to determine what
+	pair of inputs produces the output 19690720."
+
+	The inputs should still be provided to the program by replacing the values at addresses 1 and 2, just like before.
+	In this program, the value placed in address 1 is called the noun, and the value placed in address 2 is called the
+	verb. Each of the two input values will be between 0 and 99, inclusive.
+
+	Once the program has halted, its output is available at address 0, also just like before. Each time you try a pair of
+	inputs, make sure you first reset the computer's memory to the values in the program (your puzzle input) - in other
+	words, don't reuse memory from a previous attempt.
+
+	Find the input noun and verb that cause the program to produce the output 19690720. What is 100 * noun + verb?
+	(For example, if noun=12 and verb=2, the answer would be 1202.)
+	"""
+
+
+	TARGET_VAL = 19690720 # 49, 67 = 4967
+
+	#ranges 1 to 98 / 2 = 49 in each set
+
+	val = compute( 12, 2 )
+
+	#list( range( 1, 99 ) )
+	#list( range( 1, 50 ) )
+	#list( range( 50, 99 ) )
+
+	for noun in range( 1, 99 ):
+		for verb in range( 1, 99 ):
+			val = compute( noun, verb )
+			if val == TARGET_VAL:
+				print( 'Noun: {0} Verb: {1}'.format( noun, verb ) )
+				answer = ( 100 * noun ) + verb
+				print( 'Answer: {0}'.format( answer ) )
+				break
