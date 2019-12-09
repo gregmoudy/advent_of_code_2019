@@ -1,8 +1,4 @@
 import os.path
-import itertools
-
-
-#======================================================================
 
 file_path = os.path.splitext( __file__ )[ 0 ] + '_input.txt'
 with open( file_path, 'r' ) as f:
@@ -16,45 +12,63 @@ with open( file_path, 'r' ) as f:
 class Intcode_Computer:
 	def __init__( self ):
 		self.data = list( INPUT_DATA )
-		self.index = 0
+		self.data.extend( [ 0 ] * 10000 )
+		self.idx = 0
+		self.relative_base = 0
 		self.inputs = [ ]
 		self.output = None
 		self.done = False
 
 
-	@ staticmethod
-	def translate_instruction( instruction ):
+	def translate_instruction( self, instruction ):
 		instruction_str = str( instruction )
 
 		while len( instruction_str ) < 5:
 			instruction_str = '0' + instruction_str
 
 		opcode = int( instruction_str[ 3: ] )
-		mode_1 = int( instruction_str[ 2 ] )
-		mode_2 = int( instruction_str[ 1 ] )
-		mode_3 = int( instruction_str[ 0 ] ) # This should always be 0?
+		mode1 = int( instruction_str[ 2 ] )
+		mode2 = int( instruction_str[ 1 ] )
+		mode3 = int( instruction_str[ 0 ] ) # This should always be 0?
 
-		return opcode, mode_1, mode_2, mode_3
+		return opcode, mode1, mode2, mode3
 
 
-	@staticmethod
-	def get_param_val( data, index, mode ):
+	def get_param( self, param_num, mode ):
 		PARAM_MODE_POSITION 	= 0 # Value is an index position. A value of 50 returns the value at index 50.
 		PARAM_MODE_IMMEDIATE = 1 # Value is a value. A value of 50 is returned as 50.
+		PARAM_MODE_RELATIVE 	= 2 # Position value that is combined with a relative base position.
 
-		# Mode Position
 		if mode == PARAM_MODE_POSITION:
-			return data[ data[ index ] ]
+			return self.data[ self.idx + param_num ]
 
-		# Mode Immediate
-		return data[ index ]
+		elif mode == PARAM_MODE_IMMEDIATE:
+			return self.idx + param_num
+
+		elif mode == PARAM_MODE_RELATIVE:
+			return self.relative_base + self.data[ self.idx + param_num ]
+
+		raise ValueError
 
 
-	def get_param_vals( self, data, index, mode_1, mode_2 ):
-		val_1 = self.get_param_val( data, index + 1, mode_1 )
-		val_2 = self.get_param_val( data, index + 2, mode_2 )
+	def get_params(self, mode1, mode2 = None, mode3 = None):
+		param1 = self.get_param( 1, mode1 )
+		param2 = None
+		param3 = None
 
-		return val_1, val_2
+		if mode2 is not None:
+			param2 = self.get_param( 2, mode2 )
+
+		if mode3 is not None:
+			param3 = self.get_param( 3, mode3 )
+
+		if param3 is not None:
+			return param1, param2, param3
+
+		if param2 is not None:
+			return param1, param2
+
+		return param1
 
 
 	def compute( self ):
@@ -70,47 +84,56 @@ class Intcode_Computer:
 		OPCODE_LESS_THAN 	= 7 # If the first param is less than the second param, 1 gets stored at the target, otherwise 0.
 		OPCODE_EQUALS 		= 8 # If the first param is equel to the second param, 1 gets stored at the target, otherwise 0.
 
+		OPCODE_RB_OFFSET 	= 9 # Adjusts the relative base by the value of its only parameter.
+
 		OPCODE_HALT 		= 99 # HALT
 
 		while True:
-			opcode, mode_1, mode_2, mode_3 = self.translate_instruction( self.data[ self.index ] )
+			opcode, mode1, mode2, mode3 = self.translate_instruction( self.data[ self.idx ] )
 
 			if opcode == OPCODE_ADD:
-				val_1, val_2 = self.get_param_vals( self.data, self.index, mode_1, mode_2 )
-				self.data[ self.data[ self.index + 3 ] ] = val_1 + val_2
-				self.index += 4
+				param1, param2, param3 = self.get_params( mode1, mode2, mode3 )
+				self.data[ param3 ] = self.data[ param1 ] + self.data[ param2 ]
+				self.idx += 4
 
 			elif opcode == OPCODE_MULTIPLY:
-				val_1, val_2 = self.get_param_vals( self.data, self.index, mode_1, mode_2 )
-				self.data[ self.data[ self.index + 3 ] ] = val_1 * val_2
-				self.index += 4
+				param1, param2, param3 = self.get_params( mode1, mode2, mode3 )
+				self.data[ param3 ] = self.data[ param1 ] * self.data[ param2 ]
+				self.idx += 4
 
 			elif opcode == OPCODE_INPUT:
-				self.data[ self.data[ self.index + 1] ] = self.inputs.pop( 0 )
-				self.index += 2
+				param1 = self.get_params( mode1 )
+				self.data[ param1 ] = self.inputs.pop( 0 )
+				self.idx += 2
 
 			elif opcode == OPCODE_OUTPUT:
-				self.output = self.data[ self.data[ self.index + 1 ] ]
-				self.index += 2
+				param1 = self.get_params( mode1 )
+				self.output = self.data[ param1 ]
+				self.idx += 2
 				return self.output
 
 			elif opcode == OPCODE_JUMP_TRUE:
-				val_1, val_2 = self.get_param_vals( self.data, self.index, mode_1, mode_2 )
-				self.index = val_2 if val_1 != 0 else self.index + 3
+				param1, param2 = self.get_params( mode1, mode2 )
+				self.idx = self.data[ param2 ] if self.data[ param1 ] != 0 else self.idx + 3
 
 			elif opcode == OPCODE_JUMP_FALSE:
-				val_1, val_2 = self.get_param_vals( self.data, self.index, mode_1, mode_2 )
-				self.index = val_2 if val_1 == 0 else self.index + 3
+				param1, param2 = self.get_params( mode1, mode2 )
+				self.idx = self.data[ param2 ] if self.data[ param1 ] == 0 else self.idx + 3
 
 			elif opcode == OPCODE_LESS_THAN:
-				val_1, val_2 = self.get_param_vals( self.data, self.index, mode_1, mode_2 )
-				self.data[ self.data[ self.index + 3 ] ] = 1 if val_1 < val_2 else 0
-				self.index += 4
+				param1, param2, param3 = self.get_params( mode1, mode2, mode3 )
+				self.data[ param3 ] = 1 if self.data[ param1 ] < self.data[ param2 ] else 0
+				self.idx += 4
 
 			elif opcode == OPCODE_EQUALS:
-				val_1, val_2 = self.get_param_vals( self.data, self.index, mode_1, mode_2 )
-				self.data[ self.data[ self.index + 3 ] ] = 1 if val_1 == val_2 else 0
-				self.index += 4
+				param1, param2, param3 = self.get_params( mode1, mode2, mode3 )
+				self.data[ param3 ] = 1 if self.data[ param1 ] == self.data[ param2 ] else 0
+				self.idx += 4
+
+			elif opcode == OPCODE_RB_OFFSET:
+				param1 = self.get_params( mode1 )
+				self.relative_base += self.data[ param1 ]
+				self.idx += 2
 
 			elif opcode == OPCODE_HALT:
 				self.done = True
@@ -120,36 +143,16 @@ class Intcode_Computer:
 #======================================================================
 
 
-def calc_max_thruster_signal( amp_phase_min, amp_phase_max, feedback_loop = False ):
-	thruster_signals = [ ]
-
-	for amp_phases in itertools.permutations( range( amp_phase_min, amp_phase_max + 1 ) ):
-		computers = [ ]
-		for amp_phase in amp_phases:
-			computer = Intcode_Computer( )
-			computer.inputs.append( amp_phase )
-			computers.append( computer )
-
-		output = 0
-		while computers[ -1 ].done == False:
-			for computer in computers:
-				computer.inputs.append( output )
-				output = computer.compute( )
-
-			if not feedback_loop:
-				break
-
-		thruster_signals.append( output )
-
-	return max( thruster_signals )
-
-
-
 if __name__ == '__main__':
+
 	# Part 1
-	max_thruster_signal = calc_max_thruster_signal( 0, 4 )
-	print( max_thruster_signal ) # 46248
+	computer = Intcode_Computer( )
+	computer.inputs.append( 1 )
+	val = computer.compute( )
+	print( val ) # 3380552333
 
 	# Part 2
-	max_thruster_signal = calc_max_thruster_signal( 5, 9, feedback_loop = True )
-	print( max_thruster_signal ) # 54163586
+	computer = Intcode_Computer( )
+	computer.inputs.append( 2 )
+	val = computer.compute( )
+	print( val ) # 78831
