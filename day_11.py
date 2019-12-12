@@ -142,17 +142,117 @@ class Intcode_Computer:
 
 #======================================================================
 
+COLOR_BLACK = 0
+COLOR_WHITE = 1
+
+
+class Painting_Robot:
+	def __init__( self, starting_color = COLOR_BLACK ):
+		self.direction = 0 # 0 is up, +1 rotates to the right.
+		self.x = 0
+		self.y = 0
+
+		self.computer = Intcode_Computer( )
+
+		self.painting = { self.location : starting_color }
+		self.panels_painted = 0
+
+
+	@property
+	def location( self ):
+		return ( self.x, self.y )
+
+
+	@property
+	def num_painted_panels( self ):
+		return len( self.painting.keys( ) )
+
+
+	def get_color( self, location ):
+		return self.painting.setdefault( location, COLOR_BLACK )
+
+
+	def set_color( self, location, color ):
+		self.painting[ location ] = color
+
+
+	def rotate( self, turns ):
+		self.direction += turns
+		self.direction %= 4 # Normalize to 0 to 3.
+
+
+	def move( self, spaces ):
+		if self.direction == 0:
+			self.y += spaces
+
+		elif self.direction == 1:
+			self.x += spaces
+
+		elif self.direction == 2:
+			self.y -= spaces
+
+		elif self.direction == 3:
+			self.x -= spaces
+
+
+	def run( self ):
+		while not self.computer.done:
+			starting_color = self.get_color( self.location )
+			self.computer.inputs.append( starting_color )
+
+			color = self.computer.compute( )
+			self.set_color( self.location, color )
+
+			direction = self.computer.compute( )
+
+			# Clockwise
+			if direction == 1:
+				self.rotate( 1 )
+
+			# Counter Clockwise
+			else:
+				self.rotate( -1 )
+
+			self.move( 1 )
+
+
+	def draw_painting( self ):
+		x_vals = set( )
+		y_vals = set( )
+
+		for x, y in self.painting:
+			x_vals.add( x )
+			y_vals.add( y )
+
+		x_min = min( x_vals )
+		x_max = max( x_vals )
+		y_min = min( y_vals )
+		y_max = max( y_vals )
+
+		for y in range( y_max, y_min - 1, -1 ): # Go through y in reverse.
+			line = ''
+			for x in range( x_min, x_max + 1 ):
+				color = self.get_color( ( x, y ) )
+				if color == COLOR_BLACK:
+					line += ' '
+
+				else:
+					line += '*'
+
+			print( line )
+
+
+#======================================================================
+
 
 if __name__ == '__main__':
 
 	# Part 1
-	computer = Intcode_Computer( )
-	computer.inputs.append( 1 )
-	val = computer.compute( )
-	print( val ) # 3380552333
+	robot = Painting_Robot( )
+	robot.run( )
+	print( robot.num_painted_panels ) # 2082
 
 	# Part 2
-	computer = Intcode_Computer( )
-	computer.inputs.append( 2 )
-	val = computer.compute( )
-	print( val ) # 78831
+	robot = Painting_Robot( COLOR_WHITE )
+	robot.run( )
+	robot.draw_painting( ) # FARBCFJK
