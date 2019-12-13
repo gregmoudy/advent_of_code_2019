@@ -1,4 +1,5 @@
 import os.path
+import time
 
 file_path = os.path.splitext( __file__ )[ 0 ] + '_input.txt'
 with open( file_path, 'r' ) as f:
@@ -18,6 +19,8 @@ class Intcode_Computer:
 		self.inputs = [ ]
 		self.output = None
 		self.done = False
+
+		self.user_input_callback_func = None
 
 
 	def translate_instruction( self, instruction ):
@@ -103,7 +106,14 @@ class Intcode_Computer:
 
 			elif opcode == OPCODE_INPUT:
 				param1 = self.get_params( mode1 )
-				self.data[ param1 ] = self.inputs.pop( 0 )
+
+				if self.user_input_callback_func is not None:
+					input_val = self.user_input_callback_func( )
+
+				else:
+					input_val = self.inputs.pop( 0 )
+
+				self.data[ param1 ] = input_val
 				self.idx += 2
 
 			elif opcode == OPCODE_OUTPUT:
@@ -142,104 +152,106 @@ class Intcode_Computer:
 
 #======================================================================
 
-COLOR_BLACK = 0
-COLOR_WHITE = 1
+TILE_EMPTY 	= 0
+TILE_WALL 	= 1
+TILE_BLOCK 	= 2
+TILE_PADDLE = 3
+TILE_BALL 	= 4
+
+LEFT 		= -1
+NEUTRAL 	= 0
+RIGHT 	= 1
 
 
-class Painting_Robot:
-	def __init__( self, starting_color = COLOR_BLACK ):
-		self.direction = 0 # 0 is up, +1 rotates to the right.
-		self.x = 0
-		self.y = 0
-
+class Arcade:
+	def __init__( self, quarters = None ):
 		self.computer = Intcode_Computer( )
+		self.computer.user_input_callback_func = self.get_user_input
+		self.screen = { }
+		self.score = 0
 
-		self.painting = { self.location : starting_color }
-		self.panels_painted = 0
-
-
-	@property
-	def location( self ):
-		return ( self.x, self.y )
-
-
-	@property
-	def num_painted_panels( self ):
-		return len( self.painting.keys( ) )
-
-
-	def get_color( self, location ):
-		return self.painting.setdefault( location, COLOR_BLACK )
-
-
-	def set_color( self, location, color ):
-		self.painting[ location ] = color
-
-
-	def rotate( self, turns ):
-		self.direction += turns
-		self.direction %= 4 # Normalize to 0 to 3.
-
-
-	def move( self, spaces ):
-		if self.direction == 0:
-			self.y += spaces
-
-		elif self.direction == 1:
-			self.x += spaces
-
-		elif self.direction == 2:
-			self.y -= spaces
-
-		elif self.direction == 3:
-			self.x -= spaces
+		if quarters:
+			self.computer.data[ 0 ] = quarters
 
 
 	def run( self ):
-		while not self.computer.done:
-			starting_color = self.get_color( self.location )
-			self.computer.inputs.append( starting_color )
+		while self.computer.done is False:
+			x = self.computer.compute( )
+			y = self.computer.compute( )
+			output_3 = self.computer.compute( )
 
-			color = self.computer.compute( )
-			self.set_color( self.location, color )
+			if x == -1 and y == 0:
+				self.score = output_3
 
-			direction = self.computer.compute( )
-
-			# Clockwise
-			if direction == 1:
-				self.rotate( 1 )
-
-			# Counter Clockwise
 			else:
-				self.rotate( -1 )
+				self.screen[ ( x, y ) ] = output_3
 
-			self.move( 1 )
+		self.draw_score( )
 
 
-	def draw_painting( self ):
-		x_vals = set( )
-		y_vals = set( )
+	def get_tile_count( self, tile_id ):
+		return len( [ x for x in self.screen.values( ) if x == tile_id ] )
 
-		for x, y in self.painting:
-			x_vals.add( x )
-			y_vals.add( y )
 
-		x_min = min( x_vals )
-		x_max = max( x_vals )
-		y_min = min( y_vals )
-		y_max = max( y_vals )
+	def get_tile_pos( self, lookup_tile_id ):
+		for pos in self.screen:
+			tile_id = self.screen[ pos ]
+			if tile_id == lookup_tile_id:
+				return pos
 
-		for y in range( y_max, y_min - 1, -1 ): # Go through y in reverse.
+
+	def draw_screen( self ):
+		x_max = max( [ x[ 0 ] for x in self.screen.keys( ) ] )
+		y_max = max( [ x[ 1 ] for x in self.screen.keys( ) ] )
+
+		for y in range( y_max + 1 ):
 			line = ''
-			for x in range( x_min, x_max + 1 ):
-				color = self.get_color( ( x, y ) )
-				if color == COLOR_BLACK:
-					line += ' '
+			for x in range( x_max + 1 ):
+				tile_id = self.screen.setdefault( ( x, y ), TILE_EMPTY )
+
+				if tile_id == TILE_WALL:
+					tile = '|'
+
+				elif tile_id == TILE_BLOCK:
+					tile = 'X'
+
+				elif tile_id == TILE_PADDLE:
+					tile = '-'
+
+				elif tile_id == TILE_BALL:
+					tile = 'o'
 
 				else:
-					line += '*'
+					tile = ' '
+
+				line += tile
 
 			print( line )
+
+		self.draw_score( )
+
+
+	def draw_score( self ):
+		print( 'Current Score: {0}'.format( self.score ) )
+
+
+	def get_user_input( self ):
+		self.draw_screen( )
+		#time.sleep( 0.001 )
+
+		ball_pos = self.get_tile_pos( TILE_BALL )
+		paddle_pos = self.get_tile_pos( TILE_PADDLE )
+
+		if ball_pos[ 0 ] < paddle_pos[ 0 ]:
+			joystick_val = LEFT
+
+		elif ball_pos[ 0 ] > paddle_pos[ 0 ]:
+			joystick_val = RIGHT
+
+		else:
+			joystick_val = NEUTRAL
+
+		return joystick_val
 
 
 #======================================================================
@@ -248,11 +260,15 @@ class Painting_Robot:
 if __name__ == '__main__':
 
 	# Part 1
-	robot = Painting_Robot( )
-	robot.run( )
-	print( robot.num_painted_panels ) # 2082
+	arcade = Arcade( )
+
+	# How many block tiles are on the screen when the game exits?
+	arcade.run( )
+	block_count = arcade.get_tile_count( TILE_BLOCK )
+	print( 'Number of block tiles: {0}'.format( block_count ) ) # 361
 
 	# Part 2
-	robot = Painting_Robot( COLOR_WHITE )
-	robot.run( )
-	robot.draw_painting( ) # FARBCFJK
+	arcade = Arcade( quarters = 2 )
+
+	# What is your score after the last block is broken?
+	arcade.run( ) # 17590
