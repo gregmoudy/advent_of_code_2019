@@ -1,5 +1,4 @@
 import os.path
-import time
 
 file_path = os.path.splitext( __file__ )[ 0 ] + '_input.txt'
 with open( file_path, 'r' ) as f:
@@ -152,123 +151,94 @@ class Intcode_Computer:
 
 #======================================================================
 
-TILE_EMPTY 	= 0
-TILE_WALL 	= 1
-TILE_BLOCK 	= 2
-TILE_PADDLE = 3
-TILE_BALL 	= 4
+NORTH = 1
+SOUTH = 1
+WEST 	= 3
+EAST 	= 4
 
-LEFT 		= -1
-NEUTRAL 	= 0
-RIGHT 	= 1
+MAP_DROID 	= 'D'
+MAP_EMPTY 	= '.'
+MAP_WALL 	= '#'
+MAP_O2 		= 'O'
 
 
-class Arcade:
-	def __init__( self, quarters = None ):
+#Accept a movement command via an input instruction.
+#Send the movement command to the repair droid.
+#Wait for the repair droid to finish the movement operation.
+#Report on the status of the repair droid via an output instruction.
+
+class Repair_Droid:
+	def __init__( self ):
 		self.computer = Intcode_Computer( )
-		self.computer.user_input_callback_func = self.get_user_input
-		self.screen = { }
-		self.score = 0
+		self.computer.user_input_callback_func = self.get_movement_input
 
-		if quarters:
-			self.computer.data[ 0 ] = quarters
+		self.position = ( 0, 0 )
+
+		self.planned_movement = NORTH
+		self.direction = ( 0, 1 )
+
+		self.map_data = { self.position : MAP_EMPTY }
+
+
+	@property
+	def planned_position( self ):
+		return ( self.position[ 0 ] + self.direction[ 0 ], self.position[ 1 ] + self.direction[ 1 ] )
+
+
+	def move_north( self ):
+		self.planned_movement = NORTH
+		self.direction = ( 0, 1 )
+
+
+	def move_south( self ):
+		self.planned_movement = SOUTH
+		self.direction = ( 0, -1 )
+
+
+	def move_west( self ):
+		self.planned_movement = WEST
+		self.direction = ( -1, 0 )
+
+
+	def move_east( self ):
+		self.planned_movement = EAST
+		self.direction = ( 0, 1 )
+
+
+	def get_movement_input( self ):
+		return self.planned_movement
+
+
+	def process_output( self, status ):
+		STATUS_WALL_HIT 		= 0 # Position not changed.
+		STATUS_MOVED 			= 1
+		STATUS_MOVED_AT_O2 	= 2
+
+		if status == STATUS_WALL_HIT:
+			self.map_data[ self.planned_position ] = MAP_WALL
+			self.move_east( )
+
+		elif status == STATUS_MOVED:
+			self.map_data[ self.planned_position ] = MAP_EMPTY
+			self.position = self.planned_position
+
+		elif status == STATUS_MOVED_AT_O2:
+			self.map_data[ self.planned_position ] = MAP_O2
+			self.computer.done = True
+
+			# TODO: PRINT MAP???
+			return
 
 
 	def run( self ):
 		while self.computer.done is False:
-			x = self.computer.compute( )
-			y = self.computer.compute( )
-			output_3 = self.computer.compute( )
-
-			if x == -1 and y == 0:
-				self.score = output_3
-
-			else:
-				self.screen[ ( x, y ) ] = output_3
-
-		self.draw_score( )
-
-
-	def get_tile_count( self, tile_id ):
-		return len( [ x for x in self.screen.values( ) if x == tile_id ] )
-
-
-	def get_tile_pos( self, lookup_tile_id ):
-		for pos in self.screen:
-			tile_id = self.screen[ pos ]
-			if tile_id == lookup_tile_id:
-				return pos
-
-
-	def draw_screen( self ):
-		x_max = max( [ x[ 0 ] for x in self.screen.keys( ) ] )
-		y_max = max( [ x[ 1 ] for x in self.screen.keys( ) ] )
-
-		for y in range( y_max + 1 ):
-			line = ''
-			for x in range( x_max + 1 ):
-				tile_id = self.screen.setdefault( ( x, y ), TILE_EMPTY )
-
-				if tile_id == TILE_WALL:
-					tile = '|'
-
-				elif tile_id == TILE_BLOCK:
-					tile = 'X'
-
-				elif tile_id == TILE_PADDLE:
-					tile = '-'
-
-				elif tile_id == TILE_BALL:
-					tile = 'o'
-
-				else:
-					tile = ' '
-
-				line += tile
-
-			print( line )
-
-		self.draw_score( )
-
-
-	def draw_score( self ):
-		print( 'Current Score: {0}'.format( self.score ) )
-
-
-	def get_user_input( self ):
-		self.draw_screen( )
-		#time.sleep( 0.001 )
-
-		ball_pos = self.get_tile_pos( TILE_BALL )
-		paddle_pos = self.get_tile_pos( TILE_PADDLE )
-
-		if ball_pos[ 0 ] < paddle_pos[ 0 ]:
-			joystick_val = LEFT
-
-		elif ball_pos[ 0 ] > paddle_pos[ 0 ]:
-			joystick_val = RIGHT
-
-		else:
-			joystick_val = NEUTRAL
-
-		return joystick_val
+			output = self.computer.compute( )
+			self.process_output( output )
 
 
 #======================================================================
 
 
 if __name__ == '__main__':
-
-	# Part 1
-	arcade = Arcade( )
-
-	# How many block tiles are on the screen when the game exits?
-	arcade.run( )
-	block_count = arcade.get_tile_count( TILE_BLOCK )
-	print( 'Number of block tiles: {0}'.format( block_count ) ) # 361
-
-	# Part 2
-	arcade = Arcade( quarters = 2 )
-
-	# What is your score after the last block is broken?
-	arcade.run( ) # 17590
+	droid = Repair_Droid( )
+	droid.run( )
