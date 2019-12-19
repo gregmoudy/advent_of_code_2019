@@ -164,39 +164,86 @@ MAP_PULLED = '#'
 class Drone:
 	def __init__( self ):
 		self.computer = Intcode_Computer( )
-
 		self.scan_map = { }
-		self.scan_map_x_max = 0
-		self.scan_map_y_max = 0
 
 
-	def scan( self, x_min = 0, x_max = 49, y_min = 0, y_max = 49 ):
-		self.scan_map_x_max = max( self.scan_map_x_max, x_max )
-		self.scan_map_y_max = max( self.scan_map_y_max, y_max )
-
+	def scan_range( self, x_min = 0, x_max = 49, y_min = 0, y_max = 49 ):
 		for y in range( y_min, y_max + 1 ):
 			for x in range( x_min, x_max + 1 ):
-				self.computer.inputs.append( x )
-				self.computer.inputs.append( y )
-				output = self.computer.compute( )
+				pos = ( x, y )
+				self.get_map_icon( pos )
 
-				if output == STATIONARY:
-					self.scan_map[ ( x, y ) ] = MAP_EMPTY
 
-				elif output == PULLED:
-					self.scan_map[ ( x, y ) ] = MAP_PULLED
+	def look_for_box( self, size = ( 100, 100 ), starting_line = 3 ):
+		box_pos = None
+		x = 0
+		y = starting_line
 
-				else:
-					raise ValueError
+		scan_area_found_for_line = False
 
-				self.computer.reset( )
+		while box_pos is None:
+			icon = self.get_map_icon( ( x, y ) )
+
+			# If the spot is empty, we were already in a scan area, go to the next line and start over.
+			if icon == MAP_EMPTY:
+				if scan_area_found_for_line:
+					# Go to next line.
+					#x = 0
+					y += 1
+					scan_area_found_for_line = False
+					continue
+
+			elif icon == MAP_PULLED:
+				scan_area_found_for_line = True
+
+				# Check for the box. Check this lines width to see if we can skip it.
+				icon_upper_right = self.get_map_icon( ( x + size[ 0 ] - 1, y ) )
+				if icon_upper_right == MAP_EMPTY:
+					# Go to next line.
+					y += 1
+					scan_area_found_for_line = False
+					continue
+
+				icon_lower_left = self.get_map_icon( ( x, y + size[ 1 ] - 1 ) )
+				if icon_lower_left == MAP_PULLED:
+					print( 'Box found at: {0}'.format( ( x, y ) ) )
+					return ( x, y )
+
+			x +=1
+
+
+	def computer_scan( self, pos ):
+		self.computer.reset( )
+		self.computer.inputs.append( pos[ 0 ] )
+		self.computer.inputs.append( pos[ 1 ] )
+		output = self.computer.compute( )
+
+		return output
+
+
+	def get_map_icon( self, pos ):
+		icon = self.scan_map.get( pos )
+		if icon is None:
+			icon = MAP_EMPTY
+			output = self.computer_scan( pos )
+			if output == PULLED:
+				icon = MAP_PULLED
+
+			self.scan_map[ pos ] = icon
+
+		return icon
 
 
 	def draw_map( self ):
+		xs, ys = list( zip( *list( self.scan_map.keys( ) ) ) )
+
+		scan_map_x_max = max( xs )
+		scan_map_y_max = max( ys )
+
 		pull_count = 0
-		for y in range( self.scan_map_y_max ):
+		for y in range( scan_map_y_max ):
 			line = ''
-			for x in range( self.scan_map_x_max ):
+			for x in range( scan_map_x_max ):
 				icon = self.scan_map.get( ( x, y ), MAP_EMPTY )
 				line += icon
 
@@ -215,20 +262,28 @@ if __name__ == '__main__':
 	drone = Drone( )
 
 	# Part 1
-	drone.scan( )
+	drone.scan_range( x_min = 0, x_max = 49, y_min = 0, y_max = 49 )
 	drone.draw_map( ) # 206
 
 	# Part 2
-	drone.scan( )
-	drone.draw_map( )
-
-	print( 'break' )
+	box_pos = drone.look_for_box( )
+	val = ( box_pos[ 0 ] * 10000 ) + box_pos[ 1 ]
+	print( 'Part 2: {0}'.format( val ) )
 
 	# NOTES
 	# Scan 100 x 100 areas starting at a point with a #
 	# As soon as a empty post is detected break, and go to the next line and scan
 	# 100 x 100 area at the first # on the line, repeat.
+	# I DONT THINK THIS WILL WORK
+	# This 100x100 cube is not going to start at the first # on a line, its going to probably end of the first line and start on the last.
 	#
 	# We might be able to jump ahead.
 	# There might be ways to calculate the angle of the 2 sides of the beam
 	# and plot the general area where it would be wide enough.
+	#
+	# Scan backwards, go right to left, look for a # then we only need to scan for the outer sides of the 100x100 box.
+	# alternate back and forth scanning left and top and till we hit an empty space or 100 # marks
+	#  1 fuck this, just jump over and scan, we only need to scan the 4 corners of the area
+	# then jump over to the last corner in the lower left and scan it and see if it passes.
+	# 3,4 is the first scan hit.
+	# top left, bottom left, top right, bottom right
