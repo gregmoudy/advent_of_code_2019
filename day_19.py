@@ -11,6 +11,11 @@ with open( file_path, 'r' ) as f:
 
 class Intcode_Computer:
 	def __init__( self ):
+		self.reset( )
+		self.user_input_callback_func = None
+
+
+	def reset( self ):
 		self.data = list( INPUT_DATA )
 		self.data.extend( [ 0 ] * 10000 )
 		self.idx = 0
@@ -18,8 +23,6 @@ class Intcode_Computer:
 		self.inputs = [ ]
 		self.output = None
 		self.done = False
-
-		self.user_input_callback_func = None
 
 
 	def translate_instruction( self, instruction ):
@@ -151,10 +154,81 @@ class Intcode_Computer:
 
 #======================================================================
 
+STATIONARY = 0
+PULLED = 1
+
+MAP_EMPTY = '.'
+MAP_PULLED = '#'
+
+
+class Drone:
+	def __init__( self ):
+		self.computer = Intcode_Computer( )
+
+		self.scan_map = { }
+		self.scan_map_x_max = 0
+		self.scan_map_y_max = 0
+
+
+	def scan( self, x_min = 0, x_max = 49, y_min = 0, y_max = 49 ):
+		self.scan_map_x_max = max( self.scan_map_x_max, x_max )
+		self.scan_map_y_max = max( self.scan_map_y_max, y_max )
+
+		for y in range( y_min, y_max + 1 ):
+			for x in range( x_min, x_max + 1 ):
+				self.computer.inputs.append( x )
+				self.computer.inputs.append( y )
+				output = self.computer.compute( )
+
+				if output == STATIONARY:
+					self.scan_map[ ( x, y ) ] = MAP_EMPTY
+
+				elif output == PULLED:
+					self.scan_map[ ( x, y ) ] = MAP_PULLED
+
+				else:
+					raise ValueError
+
+				self.computer.reset( )
+
+
+	def draw_map( self ):
+		pull_count = 0
+		for y in range( self.scan_map_y_max ):
+			line = ''
+			for x in range( self.scan_map_x_max ):
+				icon = self.scan_map.get( ( x, y ), MAP_EMPTY )
+				line += icon
+
+				if icon == MAP_PULLED:
+					pull_count += 1
+
+			print( line )
+
+		print( pull_count )
 
 
 #======================================================================
 
 
 if __name__ == '__main__':
-	pass
+	drone = Drone( )
+
+	# Part 1
+	drone.scan( )
+	drone.draw_map( ) # 206
+
+	# Part 2
+	drone.scan( )
+	drone.draw_map( )
+
+	print( 'break' )
+
+	# NOTES
+	# Scan 100 x 100 areas starting at a point with a #
+	# As soon as a empty post is detected break, and go to the next line and scan
+	# 100 x 100 area at the first # on the line, repeat.
+	#
+	# We might be able to jump ahead.
+	# There might be ways to calculate the angle of the 2 sides of the beam
+	# and plot the general area where it would be wide enough.
